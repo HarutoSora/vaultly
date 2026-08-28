@@ -1,0 +1,40 @@
+# Local/self-hosted deployment prep for the backend + its database.
+# The frontend is a static SPA — build it (`cd frontend && npm run build`)
+# and serve `frontend/dist` from any static host or CDN; it doesn't need a
+# container of its own. The extension is never deployed this way at all —
+# it's packaged and either sideloaded or submitted to the Chrome Web Store.
+#
+# The SA password below is a local-dev placeholder, not a real secret —
+# override it (and every other value here) via a real secret store or an
+# untracked .env file before deploying anywhere that matters.
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Ch4ngeMe!ForRealDeployments"
+    ports:
+      - "1433:1433"
+    volumes:
+      - vaultly-db-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__VaultDatabase: "Server=db;Database=PasswordVaultDb;User Id=sa;Password=Ch4ngeMe!ForRealDeployments;TrustServerCertificate=True;"
+      Cors__AllowedOrigins__0: "http://localhost:8081"
+    ports:
+      - "8080:8080"
+
+volumes:
+  vaultly-db-data:

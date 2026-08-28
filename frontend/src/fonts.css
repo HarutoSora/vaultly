@@ -1,0 +1,5 @@
+/* Inter for UI text, JetBrains Mono for anything a user needs to read
+   character-by-character (passwords, TOTP codes, card numbers) — monospace
+   with unambiguous glyphs (0/O, 1/l/I) is a deliberate password-manager
+   convention, not a default. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400..700&display=swap');

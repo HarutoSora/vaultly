@@ -1,0 +1,26 @@
+# Node / npm workspaces
+node_modules/
+dist/
+*.local
+
+# Vite
+.vite/
+
+# .NET
+bin/
+obj/
+*.user
+TestResults/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

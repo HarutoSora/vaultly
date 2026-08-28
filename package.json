@@ -1,0 +1,9 @@
+{
+  "name": "vaultly",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "extension",
+    "packages/*"
+  ]
+}
