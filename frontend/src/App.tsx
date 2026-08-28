@@ -23,6 +23,7 @@ const GeneratorPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('@/pages/settings-page').then((m) => ({ default: m.SettingsPage })),
 )
+const ImportPage = lazy(() => import('@/pages/import-page').then((m) => ({ default: m.ImportPage })))
 
 function RequireUnlocked({ children }: { children: React.ReactNode }) {
   const { status } = useSession()
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="/trash" element={<VaultPage view="trash" />} />
           <Route path="/folders/:folderId" element={<VaultPage view="folder" />} />
           <Route path="/generator" element={<GeneratorPage />} />
+          <Route path="/import" element={<ImportPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
 

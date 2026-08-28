@@ -10,6 +10,7 @@ import {
   Star,
   StickyNote,
   Trash2,
+  UploadCloud,
   Wand2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -38,6 +39,7 @@ const primaryLinks = [
 
 const toolLinks = [
   { to: '/generator', label: 'Generator', icon: Wand2 },
+  { to: '/import', label: 'Import', icon: UploadCloud },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 

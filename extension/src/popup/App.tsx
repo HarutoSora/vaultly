@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { DEFAULT_GENERATOR_OPTIONS, generatePassword } from '@vaultly/shared'
+import { DEFAULT_GENERATOR_OPTIONS, faviconUrl, generatePassword } from '@vaultly/shared'
 import type { ExtensionStatus, MatchingLogin } from '../messages'
 import { getActiveTabId, getActiveTabOrigin, send } from './background-client'
 
@@ -196,7 +196,7 @@ function LoginsPanel({ origin }: { origin: string | null }) {
       )}
       {logins?.map((login) => (
         <div className="login-item" key={login.id}>
-          <div className="icon">🔑</div>
+          <SiteIcon website={login.data.website} />
           <div className="meta">
             <div className="name">{login.data.name || login.data.username}</div>
             <div className="sub">{login.data.username}</div>
@@ -236,6 +236,29 @@ function GeneratorPanel() {
       <button className="primary" onClick={copy}>
         {copied ? 'Copied!' : 'Copy password'}
       </button>
+    </div>
+  )
+}
+
+/** The site's own favicon when it loads, falling back to a generic glyph — same approach as the web app's VaultItemIcon, no third-party favicon service. */
+function SiteIcon({ website }: { website: string }) {
+  const [failed, setFailed] = React.useState(false)
+  const src = faviconUrl(website)
+
+  if (!src || failed) {
+    return <div className="icon">🔑</div>
+  }
+
+  return (
+    <div className="icon">
+      <img
+        src={src}
+        alt=""
+        width={16}
+        height={16}
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+      />
     </div>
   )
 }

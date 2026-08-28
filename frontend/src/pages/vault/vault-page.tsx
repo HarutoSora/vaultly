@@ -42,13 +42,28 @@ function matchesView(item: DecryptedVaultItem, view: VaultView, folderId?: strin
   }
 }
 
-function matchesSearch(item: DecryptedVaultItem, query: string): boolean {
-  if (!query) return true
+/**
+ * Higher is more relevant; 0 means "doesn't match, exclude it." Ranked
+ * rather than a plain boolean so that e.g. searching "gmail" puts an item
+ * actually named "Gmail" first, instead of burying it among every other
+ * login whose username happens to be a @gmail.com address too.
+ */
+function searchScore(item: DecryptedVaultItem, query: string): number {
+  if (!query) return 1
   const q = query.toLowerCase()
-  const haystack = [item.data.name, item.type === VaultItemType.Login ? (item.data as LoginItemData).username : '']
-    .join(' ')
-    .toLowerCase()
-  return haystack.includes(q)
+  const name = item.data.name.toLowerCase()
+
+  if (name.startsWith(q)) return 3
+  if (name.includes(q)) return 2
+
+  if (item.type === VaultItemType.Login) {
+    const login = item.data as LoginItemData
+    if (login.username.toLowerCase().includes(q) || login.website.toLowerCase().includes(q)) {
+      return 1
+    }
+  }
+
+  return 0
 }
 
 export function VaultPage({ view }: { view: VaultView }) {
@@ -59,10 +74,18 @@ export function VaultPage({ view }: { view: VaultView }) {
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [createOpen, setCreateOpen] = React.useState(false)
 
-  const filtered = React.useMemo(
-    () => items.filter((i) => matchesView(i, view, folderId) && matchesSearch(i, search)),
-    [items, view, folderId, search],
-  )
+  const filtered = React.useMemo(() => {
+    const scored = items
+      .filter((i) => matchesView(i, view, folderId))
+      .map((item) => ({ item, score: searchScore(item, search) }))
+      .filter(({ score }) => score > 0)
+
+    if (search) {
+      scored.sort((a, b) => b.score - a.score) // stable sort — equal scores keep their existing (updatedAt-desc) order
+    }
+
+    return scored.map(({ item }) => item)
+  }, [items, view, folderId, search])
 
   const selected = filtered.find((i) => i.id === selectedId) ?? null
   const meta = view === 'folder'
@@ -98,7 +121,7 @@ export function VaultPage({ view }: { view: VaultView }) {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search"
+              placeholder="Search by name, username, or link"
               className="pl-8"
             />
           </div>

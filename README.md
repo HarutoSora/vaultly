@@ -10,7 +10,7 @@
 [![React](https://img.shields.io/badge/React-19-149ECA?style=for-the-badge&logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![SQL Server](https://img.shields.io/badge/SQL_Server-EF_Core-CC2927?style=for-the-badge&logo=microsoftsqlserver&logoColor=white)](https://www.microsoft.com/sql-server)
-[![Tests](https://img.shields.io/badge/tests-79%20passing-39d353?style=for-the-badge&logo=vitest&logoColor=white)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-96%20passing-39d353?style=for-the-badge&logo=vitest&logoColor=white)](#-testing)
 [![Zero Knowledge](https://img.shields.io/badge/encryption-Argon2id%20%2B%20AES--256--GCM-7c74ff?style=for-the-badge&logo=letsencrypt&logoColor=white)](docs/cryptography.md)
 
 </div>
@@ -57,9 +57,13 @@ not just claim it.
 
 **🔑 Vault**
 - Logins, Secure Notes, and Credit Cards
-- Folders, favorites, search
+- Folders, favorites, relevance-ranked search by name, username, *or* link
+- Real site favicons next to each login — fetched directly from the site itself, not a third-party favicon API that would see your whole domain list in one request
 - Soft-delete to Trash → restore or purge permanently
 - Optimistic-concurrency safe — two devices editing the same item at once get a clean conflict, never a silent overwrite
+
+**📥 Import from Chrome**
+- Chrome has no API for any extension to read its saved passwords — that's deliberate on Chrome's part. Vaultly instead imports the CSV file Chrome lets *you* export yourself, parsed and encrypted entirely client-side.
 
 **🧩 Browser extension**
 - Detects login forms on any site
@@ -223,7 +227,7 @@ automatic on container boot.
 
 ## 🧪 Testing
 
-79 automated tests across three languages/runtimes, plus a full manual
+96 automated tests across three languages/runtimes, plus a full manual
 browser walkthrough against the real API and database (register → verify
 → login → create/copy/trash a vault item → generator → theme) before this
 was called done.
@@ -233,7 +237,7 @@ was called done.
 # integration tests for unique constraints, cascade deletes, and concurrency conflicts.
 cd backend && dotnet test
 
-# Shared crypto/password-generator — 25 tests, pure functions, no server needed.
+# Shared crypto/password-generator/CSV-import/favicon — 42 tests, pure functions, no server needed.
 cd packages/shared && npm test
 
 # Extension's autofill domain-matching — 11 tests (the boundary that decides

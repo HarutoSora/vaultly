@@ -27,7 +27,10 @@ export function VaultItemRow({
         selected ? 'bg-brand-subtle' : 'hover:bg-surface',
       )}
     >
-      <VaultItemIcon type={item.type} />
+      <VaultItemIcon
+        type={item.type}
+        website={item.type === VaultItemType.Login ? (item.data as LoginItemData).website : undefined}
+      />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-text">{item.data.name || 'Untitled'}</p>
         <p className="truncate text-xs text-text-faint">{subtitle(item)}</p>

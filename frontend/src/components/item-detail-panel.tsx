@@ -148,7 +148,11 @@ export function ItemDetailPanel({
           )}
 
           <div className="flex items-center gap-3">
-            <VaultItemIcon type={item.type} className="size-11" />
+            <VaultItemIcon
+              type={item.type}
+              website={item.type === VaultItemType.Login ? (item.data as LoginItemData).website : undefined}
+              className="size-11"
+            />
             <div className="min-w-0">
               <p className="truncate font-medium text-text">{item.data.name || 'Untitled'}</p>
               <p className="text-xs text-text-faint">
