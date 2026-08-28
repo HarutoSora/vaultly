@@ -1,23 +1,31 @@
 import * as React from 'react'
 import { DEFAULT_GENERATOR_OPTIONS, faviconUrl, generatePassword } from '@vaultly/shared'
-import type { ExtensionStatus, MatchingLogin } from '../messages'
+import type { LoginItemData } from '@vaultly/shared'
+import type { ExtensionMode, ExtensionStatus, MatchingLogin, StatusResponse } from '../messages'
 import { getActiveTabId, getActiveTabOrigin, send } from './background-client'
 
 // TODO: point at the real deployed web app origin for a production build.
 const WEB_VAULT_URL = 'https://local.passwordvault.com'
 
-type Tab = 'logins' | 'generator'
+type Tab = 'logins' | 'vault' | 'generator'
 
 export default function App() {
-  const [status, setStatus] = React.useState<ExtensionStatus>('loading')
-  const [email, setEmail] = React.useState<string | null>(null)
+  const [statusInfo, setStatusInfo] = React.useState<StatusResponse>({
+    status: 'loading',
+    mode: null,
+    email: null,
+    hasLocalVault: false,
+  })
   const [origin, setOrigin] = React.useState<string | null>(null)
   const [tab, setTab] = React.useState<Tab>('logins')
+  // Explicit escape hatches from a locked screen — "use the other mode
+  // instead" — independent of whichever mode getStatus() reports as active.
+  const [forceFlow, setForceFlow] = React.useState<'server-login' | 'local-setup' | 'local-unlock' | null>(null)
 
   const refreshStatus = React.useCallback(async () => {
-    const result = await send<{ status: ExtensionStatus; email: string | null }>({ type: 'GET_STATUS' })
-    setStatus(result.status)
-    setEmail(result.email)
+    const result = await send<StatusResponse>({ type: 'GET_STATUS' })
+    setStatusInfo(result)
+    setForceFlow(null)
   }, [])
 
   React.useEffect(() => {
@@ -25,41 +33,75 @@ export default function App() {
     getActiveTabOrigin().then(setOrigin)
   }, [refreshStatus])
 
+  const { status, mode, email, hasLocalVault } = statusInfo
+
   return (
     <div className="popup">
-      <Header email={email} status={status} onLocked={refreshStatus} />
+      <Header mode={mode} email={email} status={status} onLocked={refreshStatus} />
       {status === 'loading' && (
         <div className="center">
           <p className="muted">Loading…</p>
         </div>
       )}
-      {status === 'signed-out' && <SignedOut />}
-      {status === 'locked' && <Locked onUnlocked={refreshStatus} />}
+      {status === 'no-vault' && !forceFlow && <Chooser onChoose={setForceFlow} />}
+      {status === 'no-vault' && forceFlow === 'server-login' && (
+        <ServerLogin onUnlocked={refreshStatus} onBack={() => setForceFlow(null)} />
+      )}
+      {status === 'no-vault' && forceFlow === 'local-setup' && (
+        <LocalSetup onCreated={refreshStatus} onBack={() => setForceFlow(null)} />
+      )}
+      {status === 'locked' && !forceFlow && mode === 'local' && (
+        <LocalUnlock onUnlocked={refreshStatus} onUseAccountInstead={() => setForceFlow('server-login')} />
+      )}
+      {status === 'locked' && !forceFlow && mode === 'server' && (
+        <ServerLogin
+          onUnlocked={refreshStatus}
+          onUseLocalInstead={
+            hasLocalVault ? () => setForceFlow('local-unlock') : () => setForceFlow('local-setup')
+          }
+        />
+      )}
+      {status === 'locked' && forceFlow === 'server-login' && (
+        <ServerLogin onUnlocked={refreshStatus} onBack={() => setForceFlow(null)} />
+      )}
+      {status === 'locked' && forceFlow === 'local-unlock' && (
+        <LocalUnlock onUnlocked={refreshStatus} onBack={() => setForceFlow(null)} />
+      )}
+      {status === 'locked' && forceFlow === 'local-setup' && (
+        <LocalSetup onCreated={refreshStatus} onBack={() => setForceFlow(null)} />
+      )}
       {status === 'unlocked' && (
         <>
           <div className="body" style={{ paddingBottom: 0 }}>
             <div className="tabs">
               <button className={tab === 'logins' ? 'active' : ''} onClick={() => setTab('logins')}>
-                Logins
+                This site
+              </button>
+              <button className={tab === 'vault' ? 'active' : ''} onClick={() => setTab('vault')}>
+                All logins
               </button>
               <button className={tab === 'generator' ? 'active' : ''} onClick={() => setTab('generator')}>
                 Generator
               </button>
             </div>
           </div>
-          {tab === 'logins' ? <LoginsPanel origin={origin} /> : <GeneratorPanel />}
+          {tab === 'logins' && <LoginsPanel origin={origin} />}
+          {tab === 'vault' && <VaultPanel />}
+          {tab === 'generator' && <GeneratorPanel />}
         </>
       )}
-      <Footer />
+      <Footer mode={mode} status={status} />
     </div>
   )
 }
 
 function Header({
+  mode,
   email,
   status,
   onLocked,
 }: {
+  mode: ExtensionMode | null
   email: string | null
   status: ExtensionStatus
   onLocked: () => void
@@ -69,6 +111,8 @@ function Header({
     onLocked()
   }
 
+  const title = mode === 'server' ? email ?? 'Account' : mode === 'local' ? 'Local vault (this device)' : undefined
+
   return (
     <div className="header">
       <div className="brand">
@@ -76,7 +120,7 @@ function Header({
         Vaultly
       </div>
       {status === 'unlocked' && (
-        <button className="icon-btn" title={`Lock (${email})`} onClick={lock}>
+        <button className="icon-btn" title={`Lock${title ? ` (${title})` : ''}`} onClick={lock}>
           Lock
         </button>
       )}
@@ -84,49 +128,200 @@ function Header({
   )
 }
 
-function Footer() {
+function Footer({ mode, status }: { mode: ExtensionMode | null; status: ExtensionStatus }) {
   return (
     <div className="footer">
-      <span>Zero-knowledge</span>
-      <a href={WEB_VAULT_URL} target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>
-        Open web vault ↗
-      </a>
+      <span>{mode === 'local' ? 'Local-only — no server' : 'Zero-knowledge'}</span>
+      {status !== 'no-vault' && mode !== 'local' && (
+        <a href={WEB_VAULT_URL} target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>
+          Open web vault ↗
+        </a>
+      )}
     </div>
   )
 }
 
-function SignedOut() {
+// ---- first-run chooser --------------------------------------------------
+
+function Chooser({ onChoose }: { onChoose: (flow: 'server-login' | 'local-setup') => void }) {
   return (
-    <div className="center">
-      <h1>Not signed in</h1>
-      <p className="muted">Sign in or create an account in the Vaultly web app first.</p>
-      <button
-        className="primary"
-        onClick={() => chrome.tabs.create({ url: `${WEB_VAULT_URL}/login` })}
-      >
-        Open web vault
+    <div className="body">
+      <h1>Get started</h1>
+      <p className="muted" style={{ marginBottom: 4 }}>
+        Choose how you want to use Vaultly on this device.
+      </p>
+
+      <button className="choice-card" onClick={() => onChoose('local-setup')}>
+        <div className="choice-title">Local vault</div>
+        <div className="choice-sub">
+          No account, nothing to host. Encrypted with a master password, stored only in this
+          browser. No sync, no recovery if you forget the password.
+        </div>
+      </button>
+
+      <button className="choice-card" onClick={() => onChoose('server-login')}>
+        <div className="choice-title">Sign in with account</div>
+        <div className="choice-sub">Syncs across devices via your Vaultly account.</div>
       </button>
     </div>
   )
 }
 
-function Locked({ onUnlocked }: { onUnlocked: () => void }) {
+// ---- server-mode auth (existing account) --------------------------------
+
+function ServerLogin({
+  onUnlocked,
+  onBack,
+  onUseLocalInstead,
+}: {
+  onUnlocked: () => void
+  onBack?: () => void
+  onUseLocalInstead?: () => void
+}) {
+  const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      await send({ type: 'LOGIN', email, password })
+      onUnlocked()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not sign in.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className="body" onSubmit={submit}>
+      <h1>Sign in with account</h1>
+      <p className="muted" style={{ marginBottom: 4 }}>
+        No account yet? <a href={`${WEB_VAULT_URL}/register`} target="_blank" rel="noreferrer">Create one on the web</a>.
+      </p>
+      <div className="field">
+        <label htmlFor="sl-email">Email</label>
+        <input id="sl-email" type="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
+      </div>
+      <div className="field">
+        <label htmlFor="sl-password">Master password</label>
+        <input
+          id="sl-password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      </div>
+      {error && <div className="error">{error}</div>}
+      <button className="primary" type="submit" disabled={busy || !email || !password}>
+        Sign in
+      </button>
+      {(onBack || onUseLocalInstead) && (
+        <button
+          type="button"
+          className="link-btn"
+          onClick={() => (onBack ? onBack() : onUseLocalInstead?.())}
+        >
+          {onBack ? '← Back' : 'Use a local vault instead'}
+        </button>
+      )}
+    </form>
+  )
+}
+
+// ---- local-mode setup (first time on this device) ------------------------
+
+function LocalSetup({ onCreated, onBack }: { onCreated: () => void; onBack?: () => void }) {
+  const [password, setPassword] = React.useState('')
+  const [confirm, setConfirm] = React.useState('')
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    if (password !== confirm) {
+      setError("Passwords don't match.")
+      return
+    }
+    setBusy(true)
+    try {
+      await send({ type: 'SETUP_LOCAL_VAULT', password })
+      onCreated()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the local vault.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className="body" onSubmit={submit}>
+      <h1>Create a local vault</h1>
+      <p className="muted" style={{ marginBottom: 4 }}>
+        Stored only in this browser. There is no password reset — losing this password means losing
+        the vault.
+      </p>
+      <div className="field">
+        <label htmlFor="ls-password">Master password</label>
+        <input
+          id="ls-password"
+          type="password"
+          autoFocus
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      </div>
+      <div className="field">
+        <label htmlFor="ls-confirm">Confirm master password</label>
+        <input
+          id="ls-confirm"
+          type="password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+        />
+      </div>
+      {error && <div className="error">{error}</div>}
+      <button className="primary" type="submit" disabled={busy || !password || !confirm}>
+        Create vault
+      </button>
+      {onBack && (
+        <button type="button" className="link-btn" onClick={onBack}>
+          ← Back
+        </button>
+      )}
+    </form>
+  )
+}
+
+// ---- local-mode unlock (vault already exists) -----------------------------
+
+function LocalUnlock({
+  onUnlocked,
+  onBack,
+  onUseAccountInstead,
+}: {
+  onUnlocked: () => void
+  onBack?: () => void
+  onUseAccountInstead?: () => void
+}) {
+  const [password, setPassword] = React.useState('')
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [confirmingReset, setConfirmingReset] = React.useState(false)
 
   const unlock = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
     setError(null)
     try {
-      await send({ type: 'UNLOCK', password })
+      await send({ type: 'UNLOCK_LOCAL_VAULT', password })
       onUnlocked()
     } catch (err) {
-      // A wrong password fails inside AES-GCM decryption with a generic
-      // OperationError — anything else (network, auth, a real bug) throws
-      // its own message, which is worth showing rather than masking as
-      // "wrong password" every time regardless of what actually happened.
       const message = err instanceof Error ? err.message : String(err)
       setError(
         message.toLowerCase().includes('operation') || message.toLowerCase().includes('decrypt')
@@ -138,13 +333,18 @@ function Locked({ onUnlocked }: { onUnlocked: () => void }) {
     }
   }
 
+  const resetVault = async () => {
+    await send({ type: 'RESET_LOCAL_VAULT' })
+    onUnlocked() // re-fetches status; with the vault gone this lands back on the chooser
+  }
+
   return (
     <form className="body" onSubmit={unlock}>
-      <h1>Vault locked</h1>
+      <h1>Local vault locked</h1>
       <div className="field">
-        <label htmlFor="mp">Master password</label>
+        <label htmlFor="lu-password">Master password</label>
         <input
-          id="mp"
+          id="lu-password"
           type="password"
           autoFocus
           value={password}
@@ -155,9 +355,40 @@ function Locked({ onUnlocked }: { onUnlocked: () => void }) {
       <button className="primary" type="submit" disabled={busy || !password}>
         Unlock
       </button>
+      {(onBack || onUseAccountInstead) && (
+        <button
+          type="button"
+          className="link-btn"
+          onClick={() => (onBack ? onBack() : onUseAccountInstead?.())}
+        >
+          {onBack ? '← Back' : 'Sign in with an account instead'}
+        </button>
+      )}
+
+      <div className="danger-zone">
+        {!confirmingReset ? (
+          <button type="button" className="link-btn danger" onClick={() => setConfirmingReset(true)}>
+            Forgot password? Reset this vault
+          </button>
+        ) : (
+          <div className="confirm-box">
+            <p className="muted">This permanently deletes every item in this local vault. There is no undo.</p>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" className="secondary" onClick={() => setConfirmingReset(false)}>
+                Cancel
+              </button>
+              <button type="button" className="danger-btn" onClick={resetVault}>
+                Delete vault
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </form>
   )
 }
+
+// ---- unlocked: current-site matches --------------------------------------
 
 function LoginsPanel({ origin }: { origin: string | null }) {
   const [logins, setLogins] = React.useState<MatchingLogin[] | null>(null)
@@ -214,6 +445,162 @@ function LoginsPanel({ origin }: { origin: string | null }) {
     </div>
   )
 }
+
+// ---- unlocked: full vault (view/add/edit/delete every saved login) --------
+
+const EMPTY_LOGIN: LoginItemData = { name: '', username: '', password: '', website: '', notes: '' }
+
+function VaultPanel() {
+  const [logins, setLogins] = React.useState<MatchingLogin[] | null>(null)
+  const [editing, setEditing] = React.useState<MatchingLogin | 'new' | null>(null)
+
+  const reload = React.useCallback(() => {
+    send<MatchingLogin[]>({ type: 'LIST_ALL_LOGINS' }).then(setLogins)
+  }, [])
+
+  React.useEffect(() => {
+    reload()
+  }, [reload])
+
+  if (editing) {
+    return (
+      <LoginEditor
+        initial={editing === 'new' ? null : editing}
+        onDone={() => {
+          setEditing(null)
+          reload()
+        }}
+        onCancel={() => setEditing(null)}
+      />
+    )
+  }
+
+  return (
+    <div className="body">
+      <button className="secondary" onClick={() => setEditing('new')}>
+        + Add login
+      </button>
+      {logins === null && <p className="muted">Loading…</p>}
+      {logins?.length === 0 && <p className="muted">No saved logins yet.</p>}
+      {logins?.map((login) => (
+        <div className="login-item" key={login.id}>
+          <SiteIcon website={login.data.website} />
+          <div className="meta">
+            <div className="name">{login.data.name || login.data.username}</div>
+            <div className="sub">{login.data.username}</div>
+          </div>
+          <div className="actions">
+            <button className="secondary" onClick={() => setEditing(login)} title="Edit">
+              Edit
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LoginEditor({
+  initial,
+  onDone,
+  onCancel,
+}: {
+  initial: MatchingLogin | null
+  onDone: () => void
+  onCancel: () => void
+}) {
+  const [data, setData] = React.useState<LoginItemData>(initial?.data ?? EMPTY_LOGIN)
+  const [busy, setBusy] = React.useState(false)
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false)
+
+  const field = (key: keyof LoginItemData) => ({
+    value: data[key],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setData({ ...data, [key]: e.target.value }),
+  })
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      if (initial) {
+        await send({ type: 'UPDATE_LOGIN', id: initial.id, data })
+      } else {
+        await send({ type: 'CREATE_LOGIN', data })
+      }
+      onDone()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async () => {
+    if (!initial) return
+    await send({ type: 'DELETE_LOGIN', id: initial.id })
+    onDone()
+  }
+
+  return (
+    <form className="body" onSubmit={save}>
+      <h1>{initial ? 'Edit login' : 'New login'}</h1>
+      <div className="field">
+        <label>Name</label>
+        <input placeholder="e.g. GitHub" autoFocus required {...field('name')} />
+      </div>
+      <div className="field">
+        <label>Username</label>
+        <input {...field('username')} />
+      </div>
+      <div className="field">
+        <label>Password</label>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input type="text" className="mono" style={{ flex: 1 }} {...field('password')} />
+          <button
+            type="button"
+            className="secondary"
+            style={{ width: 'auto', padding: '0 10px' }}
+            onClick={() => setData({ ...data, password: generatePassword(DEFAULT_GENERATOR_OPTIONS) })}
+          >
+            Gen
+          </button>
+        </div>
+      </div>
+      <div className="field">
+        <label>Website</label>
+        <input placeholder="https://example.com" {...field('website')} />
+      </div>
+      <button className="primary" type="submit" disabled={busy || !data.name}>
+        {initial ? 'Save changes' : 'Create login'}
+      </button>
+      <button type="button" className="link-btn" onClick={onCancel}>
+        Cancel
+      </button>
+
+      {initial && (
+        <div className="danger-zone">
+          {!confirmingDelete ? (
+            <button type="button" className="link-btn danger" onClick={() => setConfirmingDelete(true)}>
+              Delete this login
+            </button>
+          ) : (
+            <div className="confirm-box">
+              <p className="muted">This can&apos;t be undone.</p>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" className="secondary" onClick={() => setConfirmingDelete(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="danger-btn" onClick={remove}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </form>
+  )
+}
+
+// ---- generator ------------------------------------------------------------
 
 function GeneratorPanel() {
   const [password, setPassword] = React.useState(() => generatePassword(DEFAULT_GENERATOR_OPTIONS))

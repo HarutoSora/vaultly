@@ -10,7 +10,7 @@
 [![React](https://img.shields.io/badge/React-19-149ECA?style=for-the-badge&logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![SQL Server](https://img.shields.io/badge/SQL_Server-EF_Core-CC2927?style=for-the-badge&logo=microsoftsqlserver&logoColor=white)](https://www.microsoft.com/sql-server)
-[![Tests](https://img.shields.io/badge/tests-96%20passing-39d353?style=for-the-badge&logo=vitest&logoColor=white)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-112%20passing-39d353?style=for-the-badge&logo=vitest&logoColor=white)](#-testing)
 [![Zero Knowledge](https://img.shields.io/badge/encryption-Argon2id%20%2B%20AES--256--GCM-7c74ff?style=for-the-badge&logo=letsencrypt&logoColor=white)](docs/cryptography.md)
 
 </div>
@@ -70,7 +70,7 @@ not just claim it.
 |---|---|
 | `backend/` | C# / ASP.NET Core Web API · EF Core · SQL Server — `Domain → Application → Infrastructure → Api` |
 | `frontend/` | React 19 · TypeScript · Tailwind CSS v4 · Radix UI (hand-customized) · TanStack Query · React Hook Form + Zod · Motion |
-| `extension/` | Chrome MV3 — background service worker, content script, popup |
+| `extension/` | Chrome MV3 — background service worker, content script, popup. Fully standalone (local IndexedDB vault, no server) *or* account-backed, user's choice |
 | `packages/shared/` | The crypto module, password generator, and API client — imported by name (`@vaultly/shared`) from both the web app and the extension, so there's exactly **one** implementation of the security-critical code |
 
 ## ✨ Features
@@ -90,10 +90,12 @@ not just claim it.
 - Chrome has no API for any extension to read its saved passwords — that's deliberate on Chrome's part. Vaultly instead imports the CSV file Chrome lets *you* export yourself, parsed and encrypted entirely client-side.
 
 **🧩 Browser extension**
+- **Fully standalone mode** — install and go: create a master password, get a vault stored only in that browser (IndexedDB), same Argon2id/AES-256-GCM crypto as the server-backed vault, no account, no email, nothing to host. View, add, edit, and delete logins entirely inside the popup.
+- **Or sign in with an account** instead, for sync across devices via the backend — both modes are available side by side; nothing about one requires the other.
 - Detects login forms on any site
 - Autofills only when the saved item's hostname **exactly** matches the page — no fuzzy matching, no subdomain generalization
 - Offers to save a new login after you sign into a site it doesn't recognize
-- Built-in generator, lock/unlock, "open web vault"
+- Built-in generator, lock/unlock
 
 </td>
 <td width="50%" valign="top">
@@ -180,7 +182,7 @@ plain HTTP can't carry it. In a sandboxed shell where that can't prompt
 interactively: `VAULTLY_NO_HTTPS=1 npm run dev` (renders fine, sign-in
 won't fully work).
 
-### 3. Extension (optional)
+### 3. Extension (optional — and the backend/frontend above aren't required for this)
 
 Shares code with the frontend via an npm workspace, so install from the
 **repo root**:
@@ -191,8 +193,10 @@ cd extension && npm run build
 ```
 
 Chrome → `chrome://extensions` → enable Developer mode → **Load unpacked**
-→ select `extension/dist`. Sign in via the web app first — the extension
-unlocks an existing session rather than registering a new one.
+→ select `extension/dist`. First run offers a choice: **Local vault**
+(create a master password right there, nothing else needed — no backend,
+no database, no Docker) or **Sign in with account** (uses the web app's
+account, for sync — needs steps 1 and 2 above running first).
 
 ## 🐳 Docker
 
@@ -251,7 +255,7 @@ automatic on container boot.
 
 ## 🧪 Testing
 
-96 automated tests across three languages/runtimes, plus a full manual
+112 automated tests across three languages/runtimes, plus a full manual
 browser walkthrough against the real API and database (register → verify
 → login → create/copy/trash a vault item → generator → theme) before this
 was called done.
@@ -264,8 +268,10 @@ cd backend && dotnet test
 # Shared crypto/password-generator/CSV-import/favicon — 42 tests, pure functions, no server needed.
 cd packages/shared && npm test
 
-# Extension's autofill domain-matching — 11 tests (the boundary that decides
-# whether a credential can leak to the wrong site).
+# Extension — 27 tests: autofill domain-matching (11, the boundary that
+# decides whether a credential can leak to the wrong site), plus the local
+# vault's setup/unlock/CRUD/cross-key-isolation against a real IndexedDB
+# (fake-indexeddb) — no browser, no server.
 cd extension && npm test
 
 # Frontend type-check + production build
@@ -298,7 +304,7 @@ left at shadcn's defaults.
 vaultly/
 ├─ backend/                 .NET solution (Domain → Application → Infrastructure → Api)
 ├─ frontend/                React web vault
-├─ extension/               Chrome MV3 extension
+├─ extension/               Chrome MV3 extension — standalone (IndexedDB) or account-backed
 ├─ packages/shared/         crypto, password generator, API client — shared by frontend + extension
 ├─ docs/
 │  ├─ architecture.md       layer responsibilities, why a custom auth handler, how to extend

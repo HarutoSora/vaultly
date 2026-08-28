@@ -137,3 +137,25 @@ self-contained IIFE, and a normal multi-asset page, respectively).
 that ever holds the Vault Encryption Key — the popup and content script
 only exchange messages with it (`extension/src/messages.ts` defines the
 protocol) and never see key material directly.
+
+**Two vault kinds, one message protocol.** `background.ts` holds a
+`Session` that's tagged `'local'` or `'server'` and routes every
+message-handler (list/create/update/delete a login, etc.) to one of two
+backends behind that same protocol:
+
+- **Local** (`local-vault.ts` + `local-vault-db.ts`) — no account, no
+  server, no network. `local-vault.ts` runs the identical crypto chain as
+  server mode (Argon2id -> KEK -> wrapped VEK -> AES-256-GCM item content,
+  all from `@vaultly/shared`); `local-vault-db.ts` is a small promisified
+  IndexedDB wrapper that only ever stores the resulting ciphertext, scoped
+  to the extension's own storage partition. The KDF salt and wrapped VEK
+  (both meaningless without the master password) live in
+  `chrome.storage.local` alongside it.
+- **Server** — the original account-backed vault via the Vaultly API,
+  unchanged from before this mode existed.
+
+Both can exist on the same browser at once (a local vault and a signed-in
+account are independent); whichever was unlocked most recently is what's
+active. `GET_STATUS` never makes a network call once a local vault exists
+on the device — a local-only user's extension has no server dependency at
+all after setup, checked and enforced in `background.ts`'s `getStatus()`.

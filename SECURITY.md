@@ -91,6 +91,19 @@ no fuzzy or partial matching, and it never autofills without the user
 explicitly clicking "Fill" in the popup for a specific, already
 origin-filtered credential.
 
+**Local vault mode (browser extension).** The extension's standalone mode
+(`extension/src/local-vault.ts`) reuses the exact same client-side crypto as
+the server-backed vault — Argon2id derives a Key Encryption Key from the
+master password, which wraps a random Vault Encryption Key, which encrypts
+every stored item (AES-256-GCM throughout) — the only thing that changes is
+where the ciphertext lands: IndexedDB inside the extension's own storage
+partition, isolated from every website and from the account-backed vault,
+rather than a POST to the API. No account, no email, and after the vault is
+created, no network calls at all — `GET_STATUS` never contacts the server
+when a local vault already exists on the device (see the comment in
+`background.ts`), so a purely local-only user's extension never depends on
+any server being reachable, ever.
+
 **Concurrency.** `VaultItem`/`User` carry an EF Core row-version
 concurrency token, so two devices racing to edit the same record get a
 clear 409 Conflict instead of one silently overwriting the other
@@ -113,7 +126,25 @@ isn't" rule:
 - **No password-reset flow.** By design (a "reset" would require some way
   to re-derive or recover the Vault Encryption Key without the master
   password, which is exactly what zero-knowledge means can't exist) — but
-  worth saying explicitly so it isn't mistaken for an oversight.
+  worth saying explicitly so it isn't mistaken for an oversight. The
+  extension's local vault mode has the same property, more starkly: there
+  is no account at all to fall back on, so "Reset this vault" (the only
+  escape hatch on a forgotten local master password) means deleting every
+  item, not recovering them.
+- **The extension's local vault does not sync** — by definition, since
+  syncing would mean a server somewhere, which is exactly what this mode
+  exists to avoid. It's tied to one browser profile on one device; moving
+  to a new machine or reinstalling the browser means starting a new local
+  vault. Account-backed mode remains available for anyone who wants sync.
+- **The extension's local vault only stores Logins**, not Secure Notes or
+  Credit Cards — a deliberate scope decision to keep the popup UI compact,
+  not a technical limitation (the storage layer, `local-vault-db.ts`,
+  already models the same fields the other item types would need).
+- **Deleting an item from the extension popup is permanent in both modes**
+  (no trash/undo) — unlike the web app's Trash, which stays available for
+  server-mode accounts. The popup has no space for a trash view; this is a
+  compact-UI trade-off, not a change to the underlying delete semantics
+  when using the web app itself.
 - **The extension's unlocked session lives in the service worker's memory**,
   which the browser can terminate at any time when idle — see the doc
   comment at the top of `extension/src/background.ts`.
