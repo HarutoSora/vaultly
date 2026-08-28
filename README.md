@@ -200,6 +200,14 @@ Chrome → `chrome://extensions` → enable Developer mode → **Load unpacked**
 no database, no Docker) or **Sign in with account** (uses the web app's
 account, for sync — needs steps 1 and 2 above running first).
 
+`npm run build:store` instead of `npm run build` produces a second,
+publishable variant — local-vault-only, no `host_permissions`, nothing that
+ever contacts a server — this is the one meant for the Chrome Web Store,
+not the dual-mode dev build above. See
+[`docs/chrome-web-store-submission.md`](docs/chrome-web-store-submission.md)
+for the full checklist and [`docs/privacy-policy.md`](docs/privacy-policy.md)
+for that build's privacy policy.
+
 ## 🐳 Docker
 
 The whole stack — SQL Server, the API, and the frontend (nginx serving the

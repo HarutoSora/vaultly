@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "npm run clean && vite build --config vite.popup.config.ts && vite build --config vite.background.config.ts && vite build --config vite.content.config.ts",
+    "build:store": "npm run clean && vite build --config vite.popup.config.ts --mode store && vite build --config vite.background.config.ts --mode store && vite build --config vite.content.config.ts && node scripts/patch-store-manifest.mjs",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "test": "vitest run"
   },

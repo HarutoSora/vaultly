@@ -51,17 +51,21 @@ export default function App() {
           <p className="muted">Loading…</p>
         </div>
       )}
-      {status === 'no-vault' && !forceFlow && <Chooser onChoose={setForceFlow} />}
-      {status === 'no-vault' && forceFlow === 'server-login' && (
+      {status === 'no-vault' && __STORE_BUILD__ && <LocalSetup onCreated={refreshStatus} />}
+      {status === 'no-vault' && !__STORE_BUILD__ && !forceFlow && <Chooser onChoose={setForceFlow} />}
+      {status === 'no-vault' && !__STORE_BUILD__ && forceFlow === 'server-login' && (
         <ServerLogin onUnlocked={refreshStatus} onBack={() => setForceFlow(null)} />
       )}
-      {status === 'no-vault' && forceFlow === 'local-setup' && (
+      {status === 'no-vault' && !__STORE_BUILD__ && forceFlow === 'local-setup' && (
         <LocalSetup onCreated={refreshStatus} onBack={() => setForceFlow(null)} />
       )}
       {status === 'locked' && !forceFlow && mode === 'local' && (
-        <LocalUnlock onUnlocked={refreshStatus} onUseAccountInstead={() => setForceFlow('server-login')} />
+        <LocalUnlock
+          onUnlocked={refreshStatus}
+          onUseAccountInstead={__STORE_BUILD__ ? undefined : () => setForceFlow('server-login')}
+        />
       )}
-      {status === 'locked' && !forceFlow && mode === 'server' && (
+      {status === 'locked' && !__STORE_BUILD__ && !forceFlow && mode === 'server' && (
         <ServerLogin
           onUnlocked={refreshStatus}
           onUseLocalInstead={

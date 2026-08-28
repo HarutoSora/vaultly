@@ -42,8 +42,14 @@ import { setPendingSave, takePendingSave } from './pending-save'
 // frontend/nginx.conf) rather than the API container's own exposed port —
 // that keeps this on the exact origin the session cookie is scoped to.
 // Only ever contacted for server-mode actions; local mode makes no network
-// calls at all (see getStatus below).
-setApiBaseUrl('https://local.passwordvault.com/api')
+// calls at all (see getStatus below). Skipped entirely in the Chrome Web
+// Store build — that build's manifest has no host_permissions for this
+// origin (see scripts/patch-store-manifest.mjs), account/sync mode is
+// unreachable from its UI (see App.tsx), and there's no point calling this
+// pointed at a domain the build can't fetch from anyway.
+if (!__STORE_BUILD__) {
+  setApiBaseUrl('https://local.passwordvault.com/api')
+}
 
 type Session =
   | { kind: 'server'; userId: string; email: string; vek: Uint8Array }
@@ -75,6 +81,13 @@ async function getStatus(): Promise<StatusResponse> {
     // just to check. "Sign in with an account instead" (server mode) is
     // still reachable from the locked screen; it just isn't pre-checked here.
     return { status: 'locked', mode: 'local', email: null, hasLocalVault: true }
+  }
+
+  // The Chrome Web Store build has no account/sync mode at all — checking
+  // for an existing server session would just be a fetch to an origin its
+  // manifest has no permission for, with no UI to ever surface the result.
+  if (__STORE_BUILD__) {
+    return { status: 'no-vault', mode: null, email: null, hasLocalVault: false }
   }
 
   const me = await fetchCurrentUser()

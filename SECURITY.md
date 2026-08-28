@@ -7,6 +7,8 @@ account of what's actually implemented, not an aspirational one.
 For the cryptographic design specifically (Argon2id, AES-256-GCM, the full
 derivation chain), see [`docs/cryptography.md`](docs/cryptography.md).
 For how the pieces fit together, see [`docs/architecture.md`](docs/architecture.md).
+For the Chrome Web Store build specifically (what data it collects — none —
+and why), see [`docs/privacy-policy.md`](docs/privacy-policy.md).
 
 ## Reporting a vulnerability
 

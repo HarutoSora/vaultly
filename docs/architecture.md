@@ -159,3 +159,15 @@ account are independent); whichever was unlocked most recently is what's
 active. `GET_STATUS` never makes a network call once a local vault exists
 on the device — a local-only user's extension has no server dependency at
 all after setup, checked and enforced in `background.ts`'s `getStatus()`.
+
+**Two build variants of the same source, not a fork.** `npm run build`
+(dual-mode, dev/testing — points at `local.passwordvault.com`) and
+`npm run build:store` (local-vault-only, no `host_permissions`, no code
+path that ever contacts a server) are the same `App.tsx`/`background.ts`
+compiled with a single flag, `__STORE_BUILD__`, injected via Vite's
+`define` (`vite.popup.config.ts`/`vite.background.config.ts`, keyed off
+`--mode store`) and declared in `src/env.d.ts`. Dead branches are
+eliminated at build time, not hidden behind a runtime check — the store
+build's bundle contains no reference to account/sync mode at all. See
+[`docs/chrome-web-store-submission.md`](chrome-web-store-submission.md)
+for what publishing the store variant actually requires.
