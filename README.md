@@ -23,8 +23,32 @@
 > [`docs/architecture.md`](docs/architecture.md#extending-the-domain-later)
 > for exactly where each of those plugs in.
 
+## Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/vault-list.png" alt="Vault list, dark theme" /></td>
+<td width="50%"><img src="docs/screenshots/vault-detail.png" alt="Item detail with a revealed password" /></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/vault-list-light.png" alt="Vault list, light theme, with real site favicons" /></td>
+<td width="50%"><img src="docs/screenshots/register.png" alt="Create-account screen" /></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/generator.png" alt="Password generator" /></td>
+<td width="50%"><img src="docs/screenshots/import.png" alt="Import from Chrome" /></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/settings.png" alt="Settings — appearance and auto-lock" /></td>
+<td width="50%"></td>
+</tr>
+</table>
+
+(Sample data — a handful of well-known sites added to a throwaway demo account purely to show real favicons and a populated vault; not anyone's actual saved logins.)
+
 ## Contents
 
+- [Screenshots](#screenshots)
 - [What's here](#whats-here)
 - [Features](#-features)
 - [How the encryption works](#-how-the-encryption-works)
