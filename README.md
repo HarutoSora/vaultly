@@ -321,5 +321,9 @@ vaultly/
 <br/>
 
 <div align="center">
+
+If Vaultly's useful to you, a [☕ donation](https://paypal.me/Vaultly) is
+always appreciated — the same link the extension's popup footer links to.
+
 <sub>Built as a small, genuinely secure core — not a feature dump.</sub>
 </div>

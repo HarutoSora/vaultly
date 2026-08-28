@@ -13,6 +13,7 @@ import { getActiveTabId, getActiveTabOrigin, send } from './background-client'
 
 // TODO: point at the real deployed web app origin for a production build.
 const WEB_VAULT_URL = 'https://local.passwordvault.com'
+const DONATE_URL = 'https://paypal.me/Vaultly'
 
 type Tab = 'logins' | 'vault' | 'import' | 'generator'
 
@@ -143,11 +144,16 @@ function Footer({ mode, status }: { mode: ExtensionMode | null; status: Extensio
   return (
     <div className="footer">
       <span>{mode === 'local' ? 'Local-only — no server' : 'Zero-knowledge'}</span>
-      {status !== 'no-vault' && mode !== 'local' && (
-        <a href={WEB_VAULT_URL} target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>
-          Open web vault ↗
+      <div className="footer-links">
+        {status !== 'no-vault' && mode !== 'local' && (
+          <a href={WEB_VAULT_URL} target="_blank" rel="noreferrer">
+            Open web vault ↗
+          </a>
+        )}
+        <a href={DONATE_URL} target="_blank" rel="noreferrer" className="donate-link" title="Support Vaultly">
+          ♥ Donate
         </a>
-      )}
+      </div>
     </div>
   )
 }
