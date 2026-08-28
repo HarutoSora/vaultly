@@ -1,15 +1,22 @@
-# Local/self-hosted deployment prep for the backend + its database.
-# The frontend is a static SPA — build it (`cd frontend && npm run build`)
-# and serve `frontend/dist` from any static host or CDN; it doesn't need a
-# container of its own. The extension is never deployed this way at all —
-# it's packaged and either sideloaded or submitted to the Chrome Web Store.
+# Full local/self-hosted stack: SQL Server + the API + the web frontend
+# (nginx serving the production build, terminating HTTPS, and reverse-
+# proxying /api to the api container). `restart: unless-stopped` on every
+# service means Docker brings them back after a crash or a host reboot, as
+# long as Docker Desktop itself is running (Docker Desktop → Settings →
+# General → "Start Docker Desktop when you sign in" for that last bit).
 #
 # The SA password below is a local-dev placeholder, not a real secret —
 # override it (and every other value here) via a real secret store or an
 # untracked .env file before deploying anywhere that matters.
+#
+# frontend/certs/{cert.pem,key.pem} must exist before `docker compose up` —
+# they're the same locally-trusted dev certificate `vite-plugin-mkcert`
+# already generated and installed into this machine's trust store; see
+# README's Docker section for how to (re)provision them.
 services:
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "Ch4ngeMe!ForRealDeployments"
@@ -26,15 +33,42 @@ services:
   api:
     build:
       context: ./backend
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+    ports:
+      - "8080:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: "Production"
       ConnectionStrings__VaultDatabase: "Server=db;Database=PasswordVaultDb;User Id=sa;Password=Ch4ngeMe!ForRealDeployments;TrustServerCertificate=True;"
-      Cors__AllowedOrigins__0: "http://localhost:8081"
+      # The browser never talks to this origin directly — it goes through
+      # the frontend's nginx reverse proxy, so this only matters for direct
+      # API testing (curl, Swagger) against the exposed port below.
+      Cors__AllowedOrigins__0: "https://local.passwordvault.com"
+      # Real email delivery — set these in an untracked .env file (copy
+      # .env.example) or the app falls back to logging the verification
+      # code to this container's console instead. Never put real values
+      # directly in this file — it's committed to git.
+      Email__Host: "${EMAIL_HOST:-}"
+      Email__Port: "${EMAIL_PORT:-587}"
+      Email__User: "${EMAIL_USER:-}"
+      Email__Password: "${EMAIL_PASSWORD:-}"
+      Email__FromAddress: "${EMAIL_FROM_ADDRESS:-}"
+      Email__FromName: "${EMAIL_FROM_NAME:-Vaultly}"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
     ports:
-      - "8080:8080"
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./frontend/certs:/etc/nginx/certs:ro
 
 volumes:
   vaultly-db-data:

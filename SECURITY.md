@@ -78,7 +78,9 @@ database compromise still doesn't hand an attacker anyone's passwords.
 **Secrets never logged.** `AuditEvent` rows record event type, timestamp,
 and IP only — never vault content, never a password, never a session
 token. `LoggingEmailSender` only ever emits what would legitimately go in
-an email (a verification code), nothing sensitive. Reviewed as part of
+an email (a verification code), nothing sensitive; `SmtpEmailSender` logs
+even less — just the recipient and provider, never the code or body.
+Reviewed as part of
 finishing this pass — grep the codebase for `Console.Write`/`_logger.Log`
 calls near anything password/session-shaped before adding a new one.
 
@@ -99,10 +101,15 @@ clear 409 Conflict instead of one silently overwriting the other
 Said plainly, matching this project's own "don't claim it's done if it
 isn't" rule:
 
-- **No email delivery is wired up.** `LoggingEmailSender` logs verification
-  codes to the server console instead of sending real email. Swapping in a
-  real provider (SendGrid, SES, Postmark) is a single class behind the
-  existing `IEmailSender` interface — see its doc comment.
+- **Email delivery is opt-in via SMTP.** `SmtpEmailSender` (MailKit, tested
+  with Gmail's SMTP + an account App Password — never a real account
+  password) sends real verification emails once `Email:Host` is configured;
+  see `.env.example` for the exact variables and where to get a Gmail App
+  Password. Leave it unset and the app automatically falls back to
+  `LoggingEmailSender`, which just logs the verification code to the
+  server console instead — so it still works with zero email setup at all.
+  Swapping in a different provider (SendGrid, SES, Postmark) is a second
+  class behind the same `IEmailSender` interface.
 - **No password-reset flow.** By design (a "reset" would require some way
   to re-derive or recover the Vault Encryption Key without the master
   password, which is exactly what zero-knowledge means can't exist) — but

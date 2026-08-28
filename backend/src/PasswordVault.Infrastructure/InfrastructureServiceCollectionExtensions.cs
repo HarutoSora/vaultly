@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using PasswordVault.Application.Abstractions;
 using PasswordVault.Application.Auth;
 using PasswordVault.Application.Folders;
@@ -30,7 +31,19 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IServerPasswordHasher, Argon2ServerPasswordHasher>();
         services.AddSingleton<ISecureTokenGenerator, SecureTokenGenerator>();
         services.AddSingleton<IClock, SystemClock>();
-        services.AddScoped<IEmailSender, LoggingEmailSender>();
+
+        services.Configure<EmailSettings>(configuration.GetSection("Email"));
+        // Only send real email once an SMTP host is actually configured (see
+        // docker-compose.yml / .env.example) — otherwise fall back to logging,
+        // so the app still works out of the box with no email setup at all.
+        if (!string.IsNullOrWhiteSpace(configuration["Email:Host"]))
+        {
+            services.AddScoped<IEmailSender, SmtpEmailSender>();
+        }
+        else
+        {
+            services.AddScoped<IEmailSender, LoggingEmailSender>();
+        }
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IVaultItemService, VaultItemService>();

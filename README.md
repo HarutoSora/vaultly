@@ -133,9 +133,10 @@ local, Windows-auth, `localhost` instance. The API listens on
 `https://localhost:5201` — run it with `ASPNETCORE_ENVIRONMENT=Development`
 to auto-apply migrations on startup and enable `/openapi`.
 
-Verification emails aren't wired up to a real provider yet (see
-[Security](#-security)) — the code is logged to the console
-(`[DEV EMAIL] ...`) when you register.
+Verification emails only send for real once SMTP is configured (`.env` —
+see the [Docker](#-docker) section); without that, the code is just logged
+to the console (`[DEV EMAIL] ...`) when you register — see
+[Security](#-security).
 
 ### 2. Frontend
 
@@ -167,19 +168,58 @@ unlocks an existing session rather than registering a new one.
 
 ## 🐳 Docker
 
+The whole stack — SQL Server, the API, and the frontend (nginx serving the
+production build, terminating HTTPS, reverse-proxying `/api` to the API
+container) — runs in Docker, and this is the recommended way to keep
+Vaultly running continuously on a machine rather than in a terminal you
+have to keep open.
+
 ```bash
-docker compose up -d
+# One-time: point local.passwordvault.com at your own machine (needs an
+# elevated/admin shell — this file is outside what a normal process can write):
+Add-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts" -Value "127.0.0.1 local.passwordvault.com"
+
+# One-time: the frontend needs a locally-trusted TLS cert covering that
+# hostname (the Secure session cookie requires HTTPS). If you've already
+# run `npm run dev` once (vite-plugin-mkcert installed a CA), reuse it:
+mkdir -p frontend/certs
+CAROOT="$HOME/.vite-plugin-mkcert" "$HOME/.vite-plugin-mkcert/mkcert.exe" \
+  -cert-file frontend/certs/cert.pem -key-file frontend/certs/key.pem \
+  local.passwordvault.com localhost 127.0.0.1 ::1
+# (CAROOT matters — without it mkcert creates a brand-new, untrusted CA
+# instead of reusing the one already in your OS trust store.)
+
+# Optional: enable real verification emails instead of console-logged codes.
+cp .env.example .env
+# then edit .env — see its comments for how to get a Gmail App Password
+
+docker compose up -d --build
+
+# Then, once (and again after any future migration): apply migrations
+# against the containerized database.
 cd backend
 dotnet ef database update --project src/PasswordVault.Infrastructure --startup-project src/PasswordVault.Api \
   --connection "Server=localhost,1433;Database=PasswordVaultDb;User Id=sa;Password=Ch4ngeMe!ForRealDeployments;TrustServerCertificate=True;"
 ```
 
-Runs the API + a SQL Server container. Migrations are a deliberate,
-explicit step rather than automatic on boot — see `docker-compose.yml`'s
-comments. Replace the placeholder SA password before deploying anywhere
-that matters. The frontend is a static build (`frontend/dist`) — serve it
-from any static host/CDN alongside the API; it doesn't need its own
-container.
+Then open **`https://local.passwordvault.com`** — no port needed, it's
+mapped to standard 443/80. Every service has `restart: unless-stopped`, so
+Docker brings them back after a crash or a host reboot — as long as Docker
+Desktop itself is running. To make that automatic too:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-startup.ps1
+```
+
+This adds one small launcher to your Windows Startup folder that starts
+Docker Desktop at every log on (no admin rights needed — it's a plain file
+copy, not a system service or scheduled task). Remove it with
+`scripts\uninstall-startup.ps1`.
+
+Replace the placeholder SA password (`docker-compose.yml`) before deploying
+anywhere that isn't your own machine — see its comments for exactly what to
+change and why migrations are a deliberate manual step rather than
+automatic on container boot.
 
 ## 🧪 Testing
 
@@ -214,7 +254,7 @@ Full writeup, including honestly-disclosed limitations, in
 - Rate-limited + account-lockout login, deterministic decoys on the prelogin endpoint (no account enumeration).
 - `HttpOnly` + `Secure` + `SameSite=Strict` cookies, HSTS, a locked-down CSP, allow-listed CORS.
 - Every vault query is scoped to the authenticated user at the repository layer — tested explicitly, including against a real database.
-- No email delivery and no CI pipeline are wired up yet — flagged, not hidden.
+- Email delivery is opt-in via SMTP (`.env.example`) — configure it or the app just logs verification codes instead. No CI pipeline is wired up yet — flagged, not hidden.
 
 ## 🌈 Design system
 

@@ -31,4 +31,17 @@ export default defineConfig({
       },
     },
   },
+  // `vite preview` (the production-build server) has its own config block —
+  // it doesn't inherit `server.*` — so the API proxy needs repeating here
+  // for a `npm run build && npm run preview` deployment to work the same way.
+  preview: {
+    https: useHttps ? {} : undefined,
+    proxy: {
+      '/api': {
+        target: 'https://localhost:5201',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 })

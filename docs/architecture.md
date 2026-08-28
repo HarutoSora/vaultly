@@ -48,9 +48,11 @@ lockout policy, KDF parameter bounds, and the zero-knowledge invariants
 ("never log a plaintext password") all live here.
 
 **Infrastructure** — `VaultDbContext` and the EF Core repository
-implementations, `Argon2ServerPasswordHasher`, `SecureTokenGenerator`,
-`LoggingEmailSender` (the dev stand-in — see its doc comment for how to swap
-in a real provider). This is the only place that knows SQL Server exists.
+implementations, `Argon2ServerPasswordHasher`, `SecureTokenGenerator`, and
+two `IEmailSender` implementations — `SmtpEmailSender` (real delivery via
+MailKit, used when `Email:Host` is configured) and `LoggingEmailSender`
+(the zero-config fallback that just logs the code). This is the only layer
+that knows SQL Server exists.
 
 **Api** — thin controllers that map HTTP requests to Application calls,
 `SessionCookieAuthHandler` (the custom auth scheme — see below),

@@ -4,7 +4,7 @@ import type { ExtensionStatus, MatchingLogin } from '../messages'
 import { getActiveTabId, getActiveTabOrigin, send } from './background-client'
 
 // TODO: point at the real deployed web app origin for a production build.
-const WEB_VAULT_URL = 'https://localhost:5173'
+const WEB_VAULT_URL = 'https://local.passwordvault.com'
 
 type Tab = 'logins' | 'generator'
 
