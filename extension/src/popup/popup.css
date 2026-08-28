@@ -264,6 +264,26 @@ button.secondary {
   font-family: ui-monospace, monospace;
 }
 
+.field-icon-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 7px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.field-icon-btn:hover {
+  color: var(--text);
+  border-color: var(--brand);
+}
+
 .choice-card {
   width: 100%;
   text-align: left;

@@ -588,17 +588,11 @@ function LoginEditor({
       </div>
       <div className="field">
         <label>Password</label>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input type="text" className="mono" style={{ flex: 1 }} {...field('password')} />
-          <button
-            type="button"
-            className="secondary"
-            style={{ width: 'auto', padding: '0 10px' }}
-            onClick={() => setData({ ...data, password: generatePassword(DEFAULT_GENERATOR_OPTIONS) })}
-          >
-            Gen
-          </button>
-        </div>
+        <PasswordInput
+          value={data.password}
+          onChange={(password) => setData({ ...data, password })}
+          onGenerate={() => setData({ ...data, password: generatePassword(DEFAULT_GENERATOR_OPTIONS) })}
+        />
       </div>
       <div className="field">
         <label>Website</label>
@@ -633,6 +627,53 @@ function LoginEditor({
         </div>
       )}
     </form>
+  )
+}
+
+/** Masked by default, an eye toggle to reveal, a copy button with its own confirmation — same pattern as the web app's SecretValue, just compact enough for the popup. */
+function PasswordInput({
+  value,
+  onChange,
+  onGenerate,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onGenerate: () => void
+}) {
+  const [masked, setMasked] = React.useState(true)
+  const [copied, setCopied] = React.useState(false)
+
+  const copy = async () => {
+    if (!value) return
+    await navigator.clipboard.writeText(value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1200)
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      <input
+        type={masked ? 'password' : 'text'}
+        className="mono"
+        style={{ flex: 1 }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        className="field-icon-btn"
+        onClick={() => setMasked((m) => !m)}
+        title={masked ? 'Show password' : 'Hide password'}
+      >
+        {masked ? '👁' : '🙈'}
+      </button>
+      <button type="button" className="field-icon-btn" onClick={copy} title="Copy password">
+        {copied ? '✓' : '📋'}
+      </button>
+      <button type="button" className="field-icon-btn" onClick={onGenerate} title="Generate a password">
+        🎲
+      </button>
+    </div>
   )
 }
 

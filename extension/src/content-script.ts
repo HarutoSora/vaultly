@@ -75,7 +75,7 @@ function showSavePrompt(origin: string, username: string, password: string) {
       .sub { font-size:12px; color:#a3a3ad; margin-bottom:12px; word-break:break-all; }
       .row { display:flex; gap:8px; }
       button { flex:1; font-size:13px; padding:6px 10px; border-radius:6px; border:1px solid transparent; cursor:pointer; }
-      .save { background:#635bff; color:white; }
+      .save { background:#7c74ff; color:white; }
       .dismiss { background:transparent; color:#a3a3ad; border-color:#33333f; }
     </style>
     <div class="card">
