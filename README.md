@@ -309,10 +309,12 @@ vaultly/
 ├─ frontend/                React web vault
 ├─ extension/               Chrome MV3 extension — standalone (IndexedDB) or account-backed
 ├─ packages/shared/         crypto, password generator, API client — shared by frontend + extension
+├─ scripts/                 Windows Startup-folder auto-launch for Docker Desktop (see Docker section)
 ├─ docs/
 │  ├─ architecture.md       layer responsibilities, why a custom auth handler, how to extend
 │  └─ cryptography.md       the full derivation chain, parameter choices, versioning
-├─ docker-compose.yml       API + SQL Server for local/self-hosted deployment
+├─ docker-compose.yml       full stack (SQL Server + API + frontend) for local/self-hosted deployment
+├─ .env.example             SMTP variables for real email delivery — copy to .env, never commit it
 └─ SECURITY.md              threat model, what's implemented, known limitations
 ```
 
