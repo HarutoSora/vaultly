@@ -11,7 +11,12 @@ import { ItemDetailPanel } from '@/components/item-detail-panel'
 import { VaultItemRow } from '@/components/vault-item-row'
 import { useDecryptedFolders, useDecryptedVaultItems } from '@/hooks/use-vault'
 import { cn } from '@/lib/utils'
-import { type DecryptedVaultItem, type LoginItemData, VaultItemType } from '@vaultly/shared'
+import {
+  type DecryptedVaultItem,
+  type LoginItemData,
+  VaultItemType,
+  searchScore,
+} from '@vaultly/shared'
 
 export type VaultView = 'all' | 'favorites' | 'logins' | 'notes' | 'cards' | 'trash' | 'folder'
 
@@ -42,28 +47,13 @@ function matchesView(item: DecryptedVaultItem, view: VaultView, folderId?: strin
   }
 }
 
-/**
- * Higher is more relevant; 0 means "doesn't match, exclude it." Ranked
- * rather than a plain boolean so that e.g. searching "gmail" puts an item
- * actually named "Gmail" first, instead of burying it among every other
- * login whose username happens to be a @gmail.com address too.
- */
-function searchScore(item: DecryptedVaultItem, query: string): number {
-  if (!query) return 1
-  const q = query.toLowerCase()
-  const name = item.data.name.toLowerCase()
-
-  if (name.startsWith(q)) return 3
-  if (name.includes(q)) return 2
-
+/** Extracts the fields searchScore ranks against — only Login items have a username/website to search on. */
+function searchFields(item: DecryptedVaultItem): { name: string; username?: string; website?: string } {
   if (item.type === VaultItemType.Login) {
     const login = item.data as LoginItemData
-    if (login.username.toLowerCase().includes(q) || login.website.toLowerCase().includes(q)) {
-      return 1
-    }
+    return { name: item.data.name, username: login.username, website: login.website }
   }
-
-  return 0
+  return { name: item.data.name }
 }
 
 export function VaultPage({ view }: { view: VaultView }) {
@@ -77,7 +67,7 @@ export function VaultPage({ view }: { view: VaultView }) {
   const filtered = React.useMemo(() => {
     const scored = items
       .filter((i) => matchesView(i, view, folderId))
-      .map((item) => ({ item, score: searchScore(item, search) }))
+      .map((item) => ({ item, score: searchScore(searchFields(item), search) }))
       .filter(({ score }) => score > 0)
 
     if (search) {

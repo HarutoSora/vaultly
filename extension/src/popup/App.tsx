@@ -1,5 +1,12 @@
 import * as React from 'react'
-import { DEFAULT_GENERATOR_OPTIONS, faviconUrl, generatePassword } from '@vaultly/shared'
+import {
+  DEFAULT_GENERATOR_OPTIONS,
+  type ImportedLogin,
+  faviconUrl,
+  generatePassword,
+  parseChromePasswordsCsv,
+  searchScore,
+} from '@vaultly/shared'
 import type { LoginItemData } from '@vaultly/shared'
 import type { ExtensionMode, ExtensionStatus, MatchingLogin, StatusResponse } from '../messages'
 import { getActiveTabId, getActiveTabOrigin, send } from './background-client'
@@ -7,7 +14,7 @@ import { getActiveTabId, getActiveTabOrigin, send } from './background-client'
 // TODO: point at the real deployed web app origin for a production build.
 const WEB_VAULT_URL = 'https://local.passwordvault.com'
 
-type Tab = 'logins' | 'vault' | 'generator'
+type Tab = 'logins' | 'vault' | 'import' | 'generator'
 
 export default function App() {
   const [statusInfo, setStatusInfo] = React.useState<StatusResponse>({
@@ -75,18 +82,22 @@ export default function App() {
           <div className="body" style={{ paddingBottom: 0 }}>
             <div className="tabs">
               <button className={tab === 'logins' ? 'active' : ''} onClick={() => setTab('logins')}>
-                This site
+                Site
               </button>
               <button className={tab === 'vault' ? 'active' : ''} onClick={() => setTab('vault')}>
-                All logins
+                Vault
+              </button>
+              <button className={tab === 'import' ? 'active' : ''} onClick={() => setTab('import')}>
+                Import
               </button>
               <button className={tab === 'generator' ? 'active' : ''} onClick={() => setTab('generator')}>
-                Generator
+                Gen
               </button>
             </div>
           </div>
           {tab === 'logins' && <LoginsPanel origin={origin} />}
           {tab === 'vault' && <VaultPanel />}
+          {tab === 'import' && <ImportPanel />}
           {tab === 'generator' && <GeneratorPanel />}
         </>
       )}
@@ -453,6 +464,7 @@ const EMPTY_LOGIN: LoginItemData = { name: '', username: '', password: '', websi
 function VaultPanel() {
   const [logins, setLogins] = React.useState<MatchingLogin[] | null>(null)
   const [editing, setEditing] = React.useState<MatchingLogin | 'new' | null>(null)
+  const [search, setSearch] = React.useState('')
 
   const reload = React.useCallback(() => {
     send<MatchingLogin[]>({ type: 'LIST_ALL_LOGINS' }).then(setLogins)
@@ -461,6 +473,19 @@ function VaultPanel() {
   React.useEffect(() => {
     reload()
   }, [reload])
+
+  const filtered = React.useMemo(() => {
+    if (!logins) return null
+    if (!search) return logins
+    return logins
+      .map((login) => ({
+        login,
+        score: searchScore({ name: login.data.name, username: login.data.username, website: login.data.website }, search),
+      }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ login }) => login)
+  }, [logins, search])
 
   if (editing) {
     return (
@@ -480,9 +505,20 @@ function VaultPanel() {
       <button className="secondary" onClick={() => setEditing('new')}>
         + Add login
       </button>
+      {logins !== null && logins.length > 0 && (
+        <input
+          type="text"
+          placeholder="Search by name, username, or link"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      )}
       {logins === null && <p className="muted">Loading…</p>}
       {logins?.length === 0 && <p className="muted">No saved logins yet.</p>}
-      {logins?.map((login) => (
+      {logins !== null && logins.length > 0 && filtered?.length === 0 && (
+        <p className="muted">Nothing matches &quot;{search}&quot;.</p>
+      )}
+      {filtered?.map((login) => (
         <div className="login-item" key={login.id}>
           <SiteIcon website={login.data.website} />
           <div className="meta">
@@ -597,6 +633,157 @@ function LoginEditor({
         </div>
       )}
     </form>
+  )
+}
+
+// ---- import from Chrome ----------------------------------------------------
+
+type ImportStage =
+  | { kind: 'idle' }
+  | { kind: 'error'; message: string }
+  | { kind: 'preview'; items: ImportedLogin[] }
+  | { kind: 'importing'; total: number; done: number }
+  | { kind: 'done'; total: number; failed: number }
+
+function ImportPanel() {
+  const [stage, setStage] = React.useState<ImportStage>({ kind: 'idle' })
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+  const handleFile = async (file: File) => {
+    const text = await file.text()
+    try {
+      const items = parseChromePasswordsCsv(text)
+      if (items.length === 0) {
+        setStage({ kind: 'error', message: 'No importable rows found in that file.' })
+        return
+      }
+      setStage({ kind: 'preview', items })
+    } catch (err) {
+      setStage({ kind: 'error', message: err instanceof Error ? err.message : 'Could not read that file.' })
+    }
+  }
+
+  const runImport = async (items: ImportedLogin[]) => {
+    setStage({ kind: 'importing', total: items.length, done: 0 })
+    let done = 0
+    let failed = 0
+
+    for (const item of items) {
+      try {
+        await send({
+          type: 'CREATE_LOGIN',
+          data: {
+            name: item.name,
+            username: item.username,
+            password: item.password,
+            website: item.website,
+            notes: item.notes,
+          },
+        })
+        done++
+      } catch {
+        failed++
+      }
+      setStage({ kind: 'importing', total: items.length, done })
+    }
+
+    setStage({ kind: 'done', total: items.length, failed })
+  }
+
+  const reset = () => {
+    setStage({ kind: 'idle' })
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  return (
+    <div className="body">
+      <h1>Import from Chrome</h1>
+      <p className="muted" style={{ marginBottom: 4 }}>
+        Chrome doesn&apos;t let any extension read its saved passwords directly. Export them
+        yourself, then bring the file here — parsing and encryption both happen in this browser.
+      </p>
+
+      {stage.kind === 'idle' && (
+        <>
+          <ol className="import-steps">
+            <li>
+              Open <code>chrome://password-manager/passwords</code>
+            </li>
+            <li>⋮ menu → Export passwords → confirm your Windows login</li>
+            <li>Choose the downloaded .csv file below</li>
+          </ol>
+          <label className="upload-box">
+            Choose a CSV file
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) void handleFile(file)
+              }}
+            />
+          </label>
+        </>
+      )}
+
+      {stage.kind === 'error' && (
+        <>
+          <div className="error">{stage.message}</div>
+          <button className="secondary" onClick={reset}>
+            Try another file
+          </button>
+        </>
+      )}
+
+      {stage.kind === 'preview' && (
+        <>
+          <p className="muted">
+            {stage.items.length} login{stage.items.length === 1 ? '' : 's'} found
+          </p>
+          <div className="import-list">
+            {stage.items.map((item, i) => (
+              <div className="login-item" key={i}>
+                <SiteIcon website={item.website} />
+                <div className="meta">
+                  <div className="name">{item.name}</div>
+                  <div className="sub">{item.username || '—'}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="secondary" onClick={reset}>
+              Cancel
+            </button>
+            <button className="primary" style={{ width: 'auto', flex: 1 }} onClick={() => void runImport(stage.items)}>
+              Import {stage.items.length}
+            </button>
+          </div>
+        </>
+      )}
+
+      {stage.kind === 'importing' && (
+        <div className="center" style={{ padding: 20 }}>
+          <p className="muted">
+            Importing {stage.done} of {stage.total}…
+          </p>
+        </div>
+      )}
+
+      {stage.kind === 'done' && (
+        <div className="center" style={{ padding: 20 }}>
+          <p className="muted">
+            Imported {stage.total - stage.failed} of {stage.total}
+            {stage.failed > 0 && ` (${stage.failed} failed)`}.
+          </p>
+          <button className="secondary" onClick={reset}>
+            Import another file
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
