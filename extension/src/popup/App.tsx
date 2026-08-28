@@ -131,11 +131,16 @@ function Header({
         <img src="/icons/icon-32.png" alt="" className="dot" width={20} height={20} />
         Vaultly
       </div>
-      {status === 'unlocked' && (
-        <button className="icon-btn" title={`Lock${title ? ` (${title})` : ''}`} onClick={lock}>
-          Lock
-        </button>
-      )}
+      <div className="header-actions">
+        <a href={DONATE_URL} target="_blank" rel="noreferrer" className="donate-pill" title="Support Vaultly">
+          ♥ Donate
+        </a>
+        {status === 'unlocked' && (
+          <button className="icon-btn" title={`Lock${title ? ` (${title})` : ''}`} onClick={lock}>
+            Lock
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -144,16 +149,11 @@ function Footer({ mode, status }: { mode: ExtensionMode | null; status: Extensio
   return (
     <div className="footer">
       <span>{mode === 'local' ? 'Local-only — no server' : 'Zero-knowledge'}</span>
-      <div className="footer-links">
-        {status !== 'no-vault' && mode !== 'local' && (
-          <a href={WEB_VAULT_URL} target="_blank" rel="noreferrer">
-            Open web vault ↗
-          </a>
-        )}
-        <a href={DONATE_URL} target="_blank" rel="noreferrer" className="donate-link" title="Support Vaultly">
-          ♥ Donate
+      {status !== 'no-vault' && mode !== 'local' && (
+        <a href={WEB_VAULT_URL} target="_blank" rel="noreferrer">
+          Open web vault ↗
         </a>
-      </div>
+      )}
     </div>
   )
 }
