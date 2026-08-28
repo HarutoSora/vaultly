@@ -36,6 +36,7 @@ import {
 import type { BackgroundRequest, MatchingLogin, StatusResponse } from './messages'
 import { matchesOrigin } from './origin-match'
 import * as localVault from './local-vault'
+import { setPendingSave, takePendingSave } from './pending-save'
 
 // Goes through the same nginx that serves the web app (see
 // frontend/nginx.conf) rather than the API container's own exposed port —
@@ -232,8 +233,9 @@ async function shouldPromptToSave(origin: string, username: string): Promise<boo
 type AnyMessage =
   | BackgroundRequest
   | { type: 'LOGIN_FORM_SUBMITTED'; origin: string; username: string; password: string }
+  | { type: 'CHECK_PENDING_SAVE' }
 
-async function handleMessage(message: AnyMessage): Promise<unknown> {
+async function handleMessage(message: AnyMessage, tabId: number | undefined): Promise<unknown> {
   switch (message.type) {
     case 'GET_STATUS':
       return getStatus()
@@ -274,13 +276,20 @@ async function handleMessage(message: AnyMessage): Promise<unknown> {
     case 'DELETE_LOGIN':
       await deleteLogin(message.id)
       return null
-    case 'LOGIN_FORM_SUBMITTED':
-      return { shouldPrompt: await shouldPromptToSave(message.origin, message.username) }
+    case 'LOGIN_FORM_SUBMITTED': {
+      const shouldPrompt = await shouldPromptToSave(message.origin, message.username)
+      if (shouldPrompt && tabId !== undefined) {
+        await setPendingSave(tabId, { origin: message.origin, username: message.username, password: message.password })
+      }
+      return null
+    }
+    case 'CHECK_PENDING_SAVE':
+      return tabId === undefined ? null : takePendingSave(tabId)
   }
 }
 
-chrome.runtime.onMessage.addListener((message: AnyMessage, _sender, sendResponse) => {
-  handleMessage(message)
+chrome.runtime.onMessage.addListener((message: AnyMessage, sender, sendResponse) => {
+  handleMessage(message, sender.tab?.id)
     .then((data) => sendResponse({ ok: true, data }))
     .catch((err) => sendResponse({ ok: false, error: err instanceof Error ? err.message : 'Unknown error' }))
   return true // keep the message channel open for the async response above

@@ -6,10 +6,22 @@
  *     unlocked and this exact origin+username isn't already saved, offer to
  *     save it via a small in-page prompt.
  * <para/>
- * Never sends page content anywhere except the two messages below, and
- * never reads or writes anything for an origin other than the page it's
- * running on — window.location.origin is the only origin this script ever
- * has, so there's no cross-origin credential leakage to guard against here.
+ * Job 2 is a two-step handoff, not a single synchronous step, because a
+ * login submit almost always triggers a page navigation (a redirect, or an
+ * SPA route change) — the page this script is running on is usually gone
+ * within milliseconds. Trying to show the banner right here, on the
+ * about-to-navigate page, meant it got destroyed mid-render before anyone
+ * could see it. Instead: the submit listener below only *captures*
+ * credentials and hands them to the background worker, keyed by this tab's
+ * ID; the script re-injects fresh on whatever page loads next in this tab
+ * (matches every http(s) page per manifest.json's content_scripts) and asks the
+ * background "was something just captured for me?" — that page isn't about
+ * to be torn down, so the banner actually gets seen.
+ * <para/>
+ * Never sends page content anywhere except the messages below, and never
+ * reads or writes anything for an origin other than the page it's running
+ * on — window.location.origin is the only origin this script ever has, so
+ * there's no cross-origin credential leakage to guard against here.
  */
 
 function findPasswordField(): HTMLInputElement | null {
@@ -116,16 +128,24 @@ document.addEventListener(
     const password = passwordField.value
     const origin = window.location.origin
 
-    chrome.runtime.sendMessage(
-      { type: 'LOGIN_FORM_SUBMITTED', origin, username, password },
-      (response: { ok: boolean; data?: { shouldPrompt: boolean } }) => {
-        if (response?.ok && response.data?.shouldPrompt) {
-          showSavePrompt(origin, username, password)
-        }
-      },
-    )
+    // Fire-and-forget: this only asks the background worker to remember the
+    // credentials for this tab. It does not (and must not) drive any UI on
+    // this page — see the file-level comment for why.
+    chrome.runtime.sendMessage({ type: 'LOGIN_FORM_SUBMITTED', origin, username, password })
   },
   true, // capture phase — read the values before the page's own submit handler can clear the form
+)
+
+// Runs once per page load (this script re-injects on every http(s) page).
+// Almost always a no-op — only returns something on the page that loads
+// right after a login submit captured credentials worth offering to save.
+chrome.runtime.sendMessage(
+  { type: 'CHECK_PENDING_SAVE' },
+  (response: { ok: boolean; data?: { origin: string; username: string; password: string } | null }) => {
+    if (response?.ok && response.data) {
+      showSavePrompt(response.data.origin, response.data.username, response.data.password)
+    }
+  },
 )
 
 chrome.runtime.onMessage.addListener((message: { type: string; username?: string; password?: string }) => {

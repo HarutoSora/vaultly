@@ -36,9 +36,22 @@ export type BackgroundRequest =
 
 export type BackgroundResponse<T = unknown> = { ok: true; data: T } | { ok: false; error: string }
 
-// ---- content script <-> background/popup ----
+// ---- content script <-> background ----
+
+/**
+ * A login form's credentials, captured at submit time and held by the
+ * background service worker (keyed by tab ID) across the page navigation a
+ * real login submit almost always triggers — see the long comment in
+ * content-script.ts for why this two-step handshake exists instead of
+ * showing the save prompt synchronously on submit.
+ */
+export interface PendingSave {
+  origin: string
+  username: string
+  password: string
+}
 
 export type ContentScriptMessage =
   | { type: 'LOGIN_FORM_SUBMITTED'; origin: string; username: string; password: string }
   | { type: 'FILL_CREDENTIALS'; username: string; password: string }
-  | { type: 'REQUEST_SAVE_PROMPT'; origin: string; username: string; password: string }
+  | { type: 'CHECK_PENDING_SAVE' }
