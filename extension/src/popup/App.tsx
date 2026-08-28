@@ -72,7 +72,7 @@ function Header({
   return (
     <div className="header">
       <div className="brand">
-        <span className="dot">🔐</span>
+        <img src="/icons/icon-32.png" alt="" className="dot" width={20} height={20} />
         Vaultly
       </div>
       {status === 'unlocked' && (
