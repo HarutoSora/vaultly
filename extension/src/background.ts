@@ -26,8 +26,10 @@ import {
 import type { BackgroundRequest, MatchingLogin, StatusResponse } from './messages'
 import { matchesOrigin } from './origin-match'
 
-// TODO: point at the real deployed API origin for a production build.
-setApiBaseUrl('https://localhost:5201/api')
+// Goes through the same nginx that serves the web app (see
+// frontend/nginx.conf) rather than the API container's own exposed port —
+// that keeps this on the exact origin the session cookie is scoped to.
+setApiBaseUrl('https://local.passwordvault.com/api')
 
 interface Session {
   userId: string

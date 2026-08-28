@@ -122,8 +122,17 @@ function Locked({ onUnlocked }: { onUnlocked: () => void }) {
     try {
       await send({ type: 'UNLOCK', password })
       onUnlocked()
-    } catch {
-      setError('Incorrect master password.')
+    } catch (err) {
+      // A wrong password fails inside AES-GCM decryption with a generic
+      // OperationError — anything else (network, auth, a real bug) throws
+      // its own message, which is worth showing rather than masking as
+      // "wrong password" every time regardless of what actually happened.
+      const message = err instanceof Error ? err.message : String(err)
+      setError(
+        message.toLowerCase().includes('operation') || message.toLowerCase().includes('decrypt')
+          ? 'Incorrect master password.'
+          : `Could not unlock: ${message}`,
+      )
     } finally {
       setBusy(false)
     }
